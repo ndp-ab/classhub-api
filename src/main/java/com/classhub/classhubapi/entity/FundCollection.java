@@ -34,12 +34,14 @@ public class FundCollection {
     private BigDecimal amount;
 
     // Khoản thu này thuộc lớp nào — lưu ID, giống cách Classroom lưu createdBy
-    @Column(name = "classroom_id", nullable = false)
-    private Long classroomId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "classroom_id", nullable = false)
+    private Classroom classroom;
 
     // Ai tạo khoản thu — chỉ Admin mới được tạo
-    @Column(name = "created_by", nullable = false)
-    private Long createdBy;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", nullable = false)
+    private User createdBy;
 
     // Hạn chót đóng tiền — dùng LocalDate vì chỉ cần ngày, không cần giờ phút
     private LocalDate deadline;
@@ -48,4 +50,6 @@ public class FundCollection {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+
 }

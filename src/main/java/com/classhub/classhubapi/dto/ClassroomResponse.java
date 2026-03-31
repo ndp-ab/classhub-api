@@ -16,5 +16,5 @@ public class ClassroomResponse {
     private String faculty;
     private String academicYear;
     private String inviteCode;
-    private String role;        // ADMIN hoặc MEMBER
+    private String role;
 }
