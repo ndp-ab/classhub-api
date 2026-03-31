@@ -5,6 +5,7 @@ import com.classhub.classhubapi.dto.AuthResponse;
 import com.classhub.classhubapi.dto.LoginRequest;
 import com.classhub.classhubapi.dto.RegisterRequest;
 import com.classhub.classhubapi.entity.User;
+import com.classhub.classhubapi.exception.BadRequestException;
 import com.classhub.classhubapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,7 +22,7 @@ public class AuthService {
     public AuthResponse register(RegisterRequest request) {
         // Kiểm tra email đã tồn tại chưa
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email đã được sử dụng");
+            throw new BadRequestException("Email đã được sử dụng");
         }
 
         // Tạo user mới, mã hóa password
@@ -47,11 +48,11 @@ public class AuthService {
     public AuthResponse login(LoginRequest request) {
         // Tìm user theo email
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
+                .orElseThrow(() -> new BadRequestException("Email không tồn tại"));
 
         // So sánh password
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Mật khẩu không đúng");
+            throw new BadRequestException("Mật khẩu không đúng");
         }
 
         // Sinh JWT token
