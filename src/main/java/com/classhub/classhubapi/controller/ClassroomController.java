@@ -12,8 +12,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
+@CrossOrigin(origins = "*")
 @RequestMapping("/api/classrooms")
 @RequiredArgsConstructor
+
 public class ClassroomController {
 
     private final ClassroomService classroomService;
