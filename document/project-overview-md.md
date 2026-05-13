@@ -185,14 +185,15 @@ USERS ──1:N──→ FUND_EXPENSES (creates)
 | POST | /api/fund/expenses | Tạo khoản chi |
 | GET | /api/fund/expenses/{classroomId} | Xem danh sách khoản chi |
 
-### 4.4 Quỹ lớp — Khoản thu (đang triển khai)
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| POST | /api/fund/collections | Tạo khoản thu + tự tạo payment cho tất cả thành viên |
-| GET | /api/fund/collections/{classroomId} | Xem danh sách khoản thu |
-| GET | /api/fund/collections/{id}/payments | Xem ai đã đóng / chưa đóng |
-| PUT | /api/fund/payments/{id}/confirm | Xác nhận đã đóng |
-| GET | /api/fund/payments/my/{classroomId} | Xem nợ cá nhân |
+### 4.4 Quỹ lớp — Khoản thu (đã hoàn thiện ✅)
+- [x] `POST /api/fund/expenses` — create expense
+- [x] `GET /api/fund/expenses/{classroomId}` — list expenses by classroom
+- [x] `POST /api/fund/collections` — create collection + auto-create payments for all members
+- [x] `GET /api/fund/collections/{classroomId}` — list collections
+- [x] `GET /api/fund/collections/{collectionId}/payments` — list payment status per member
+- [x] `PUT /api/fund/payments/{paymentId}/confirm` — admin confirm payment
+- [x] `GET /api/fund/payments/my/{classroomId}` — my debts
+- [ ] Event APIs (not started) ⬅️ **NEXT**
 
 ### 4.5 Sự kiện (chưa triển khai)
 | Method | Endpoint | Mô tả |
@@ -210,16 +211,19 @@ USERS ──1:N──→ FUND_EXPENSES (creates)
 ```
 com.classhub.classhubapi/
 ├── config/          SecurityConfig, JwtUtil
-├── controller/      AuthController, ClassroomController, FundExpenseController
+├── controller/      AuthController.java, ClassroomController.java,
+│                    FundExpenseController.java, FundCollectionController.java
 ├── dto/             RegisterRequest, LoginRequest, AuthResponse,
 │                    CreateClassroomRequest, JoinClassroomRequest, ClassroomResponse,
-│                    CreateExpenseRequest, ExpenseResponse
+│                    CreateExpenseRequest, ExpenseResponse,
+│                    CreateCollectionRequest, CollectionResponse,
+│                    PaymentResponse, QrResponse, PaymentStatusResponse
 ├── entity/          User, Classroom, ClassMember,
-│                    FundCollection, FundPayment, FundExpense
+│                    FundCollection, FundPayment (+ paymentCode), FundExpense
 ├── exception/       BadRequestException, GlobalExceptionHandler
 ├── repository/      UserRepository, ClassroomRepository, ClassMemberRepository,
-│                    FundExpenseRepository
-└── service/         AuthService, ClassroomService, FundExpenseService
+│                    FundExpenseRepository, FundCollectionRepository, FundPaymentRepository
+└── service/         AuthService, ClassroomService, FundExpenseService, FundCollectionService
 ```
 
 ### Frontend (Flutter)
@@ -248,24 +252,23 @@ lib/
 - [x] API Auth: đăng ký + đăng nhập + JWT
 - [x] API Classroom: tạo lớp + join lớp + xem danh sách
 - [x] API Quỹ lớp: khoản chi (tạo + xem danh sách)
+- [x] API Quỹ lớp: khoản thu (tạo + xem + xem chi tiết payment + xác nhận + nợ cá nhân)
+- [x] API Quỹ lớp: QR VietQR (generate URL + polling status) — Backend hoàn thiện
 - [x] Xử lý lỗi tập trung (GlobalExceptionHandler)
 - [x] Flutter: đăng nhập, đăng ký, trang chủ, tạo lớp, join lớp
 - [x] GitHub: 2 repo đã push
 - [x] Google Form khảo sát (đã tạo)
 
-### Đang triển khai
-- [ ] API Quỹ lớp: khoản thu (tạo + xem + xác nhận đóng)
-- [ ] QR VietQR chuyển khoản
-
-### Chưa làm
-- [ ] API Sự kiện (tạo, xung phong, check-in)
-- [ ] JWT filter chuẩn (thay thế X-User-Id header)
-- [ ] Flutter: màn hình chi tiết lớp (Bottom Navigation)
-- [ ] Flutter: tab Quỹ lớp, tab Sự kiện
-- [ ] Thiết kế Figma
-- [ ] Use Case Diagram, biểu đồ tuần tự
-- [ ] Báo cáo đồ án
-- [ ] Slide thuyết trình
+### Upcoming Tasks (Priority Order)
+1. Flutter: classroom detail screen (Bottom Navigation)
+2. Flutter: fund tab — danh sách khoản thu + khoản chi
+3. Flutter: QR payment screen (polling `/status` mỗi 5s)
+4. Event APIs (create event, volunteer, check-in)
+5. Flutter: event tab
+6. JWT filter (replace X-User-Id header)
+7. Figma wireframes (backfill)
+8. Use Case Diagram + Sequence Diagram
+9. Report + slides
 
 ---
 

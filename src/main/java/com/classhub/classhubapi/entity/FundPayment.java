@@ -26,10 +26,15 @@ public class FundPayment {
     @JoinColumn(name = "collection_id", nullable = false)
     private FundCollection fundCollection;
 
+    @Builder.Default
     private boolean isPaid = false;
-    private boolean confirmedByAdmin =  false;
+    @Builder.Default
+    private boolean confirmedByAdmin = false;
     private LocalDateTime paidAt;
 
-
+    // Mã duy nhất mỗi lần mở QR: "QUY{collectionId}-SV{userId}-{timestamp}"
+    // Dùng để admin đối soát với sao kê ngân hàng
+    @Column(name = "payment_code")
+    private String paymentCode;
 
 }

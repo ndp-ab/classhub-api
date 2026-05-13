@@ -82,25 +82,32 @@ ClassHub là ứng dụng di động quản lý hoạt động lớp học đạ
 - [x] `GET /api/classrooms/my` — list my classrooms with roles
 - [x] `POST /api/fund/expenses` — create expense
 - [x] `GET /api/fund/expenses/{classroomId}` — list expenses by classroom
-- [ ] `POST /api/fund/collections` — create collection + auto-create payments for all members ⬅️ **NEXT**
-- [ ] `GET /api/fund/collections/{classroomId}` — list collections
-- [ ] `GET /api/fund/collections/{id}/payments` — list payment status per member
-- [ ] `PUT /api/fund/payments/{id}/confirm` — admin confirm payment
-- [ ] `GET /api/fund/payments/my/{classroomId}` — my debts
-- [ ] Event APIs (not started)
+- [x] `POST /api/fund/collections` — create collection + auto-create payments for all members
+- [x] `GET /api/fund/collections/{classroomId}` — list collections
+- [x] `GET /api/fund/collections/{collectionId}/payments` — list payment status per member
+- [x] `PUT /api/fund/payments/{paymentId}/confirm` — admin confirm payment
+- [x] `GET /api/fund/payments/my/{classroomId}` — my debts
+- [x] `GET /api/fund/payments/{paymentId}/qr` — generate VietQR URL + paymentCode
+- [x] `GET /api/fund/payments/{paymentId}/status` — polling payment status (PENDING/CONFIRMED)
+- [ ] Event APIs (not started) ⬅️ **NEXT**
 
 ### Backend Files Created
 ```
 com.classhub.classhubapi/
 ├── config/        SecurityConfig.java, JwtUtil.java
-├── controller/    AuthController.java, ClassroomController.java, FundExpenseController.java
+├── controller/    AuthController.java, ClassroomController.java,
+│                  FundExpenseController.java, FundCollectionController.java
 ├── dto/           RegisterRequest, LoginRequest, AuthResponse,
 │                  CreateClassroomRequest, JoinClassroomRequest, ClassroomResponse,
-│                  CreateExpenseRequest, ExpenseResponse
-├── entity/        User, Classroom, ClassMember, FundCollection, FundPayment, FundExpense
+│                  CreateExpenseRequest, ExpenseResponse,
+│                  CreateCollectionRequest, CollectionResponse,
+│                  PaymentResponse, QrResponse, PaymentStatusResponse
+├── entity/        User, Classroom, ClassMember,
+│                  FundCollection, FundPayment (+ paymentCode field), FundExpense
 ├── exception/     BadRequestException, GlobalExceptionHandler
-├── repository/    UserRepository, ClassroomRepository, ClassMemberRepository, FundExpenseRepository
-└── service/       AuthService, ClassroomService, FundExpenseService
+├── repository/    UserRepository, ClassroomRepository, ClassMemberRepository,
+│                  FundExpenseRepository, FundCollectionRepository, FundPaymentRepository
+└── service/       AuthService, ClassroomService, FundExpenseService, FundCollectionService
 ```
 
 ### Frontend Screens
@@ -134,32 +141,27 @@ lib/
 ## 5. Blockers & Next Steps
 
 ### Immediate Next Task
-**Viết API tạo khoản thu** (`POST /api/fund/collections`) — đây là API phức tạp nhất:
-1. Tạo `CreateCollectionRequest.java` (title, amount, classroomId, deadline)
-2. Tạo `CollectionResponse.java`
-3. Tạo `FundCollectionRepository.java`
-4. Tạo `FundPaymentRepository.java`
-5. Tạo `FundCollectionService.java` — logic phức tạp:
-   - Lưu khoản thu vào `fund_collections`
-   - Query `class_members` lấy tất cả thành viên lớp
-   - Tạo N bản ghi `fund_payments` (1 per member, isPaid=false)
-   - Dùng `@Transactional`
-6. Tạo `FundCollectionController.java`
+**Flutter: màn hình Quỹ lớp** — hiển thị danh sách khoản thu và tích hợp QR payment:
+1. Màn hình chi tiết lớp (Bottom Navigation: Quỹ / Sự kiện)
+2. Tab Quỹ: list khoản thu + khoản chi
+3. Màn hình đóng quỹ: hiển thị QR từ `/qr` endpoint
+4. Polling `/status` mỗi 5s → chuyển màn khi CONFIRMED
 
 ### Known Issues
 - `X-User-Id` header is insecure — need JWT filter to extract userId from token
 - `Classroom.createdBy` uses `Long` instead of `@ManyToOne` (inconsistent with newer entities)
 - No CORS config (may need when Flutter web testing)
 - IP changes on WiFi reconnect — need to update `baseUrl` in both service files
+- VietQR `vietqr.account-no` in `application.properties` cần thay bằng số TK thật trước demo
 
 ### Upcoming Tasks (Priority Order)
-1. Complete Fund Collection APIs (create + list + confirm + my debts)
-2. QR VietQR generation (Flutter side, for fund payment)
-3. Event APIs (create event, volunteer, check-in)
-4. JWT filter (replace X-User-Id header)
-5. Flutter: classroom detail screen with Bottom Navigation
-6. Flutter: fund tab + event tab
-7. Figma wireframes
+1. Flutter: classroom detail screen (Bottom Navigation)
+2. Flutter: fund tab — danh sách khoản thu + khoản chi
+3. Flutter: QR payment screen (polling status)
+4. Event APIs (create event, volunteer, check-in)
+5. Flutter: event tab
+6. JWT filter (replace X-User-Id header)
+7. Figma wireframes (backfill)
 8. Use Case Diagram + Sequence Diagram
 9. Report + slides
 

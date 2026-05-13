@@ -47,7 +47,7 @@ Admin bấm "Tạo khoản thu"
         2. Query bảng class_members lấy tất cả thành viên lớp
         3. Tạo 1 bản ghi fund_payments cho MỖI thành viên
            (isPaid = false, confirmedByAdmin = false)
-    → Trả về: khoản thu + danh sách thành viên kèm trạng thái
+    → Trả về: CollectionResponse (kèm totalMembers, paidCount)
 ```
 
 ### Luồng 2: Sinh viên xem nợ và đóng quỹ
@@ -104,32 +104,65 @@ Admin mở danh sách khoản thu "Quỹ tháng 4"
 
 ---
 
-## 5. API cần tạo
+## 5. API đã triển khai ✅
 
-| Method | Endpoint | Mô tả | Ai dùng |
-|--------|----------|-------|---------|
-| POST | /api/fund/collections | Tạo khoản thu + tự tạo payment cho tất cả thành viên | Admin |
-| GET | /api/fund/collections/{classroomId} | Xem danh sách khoản thu của lớp | Tất cả |
-| GET | /api/fund/collections/{collectionId}/payments | Xem ai đã đóng / chưa đóng | Admin |
-| PUT | /api/fund/payments/{paymentId}/confirm | Xác nhận đã đóng cho 1 sinh viên | Admin |
-| GET | /api/fund/payments/my/{classroomId} | Xem nợ cá nhân của mình | Member |
+| Method | Endpoint | Mô tả | Ai dùng | Trạng thái |
+|--------|----------|-------|---------|------------|
+| POST | /api/fund/collections | Tạo khoản thu + tự tạo payment cho tất cả thành viên | Admin | ✅ Xong |
+| GET | /api/fund/collections/{classroomId} | Xem danh sách khoản thu của lớp | Tất cả | ✅ Xong |
+| GET | /api/fund/collections/{collectionId}/payments | Xem ai đã đóng / chưa đóng | Admin | ✅ Xong |
+| PUT | /api/fund/payments/{paymentId}/confirm | Xác nhận đã đóng cho 1 sinh viên | Admin | ✅ Xong |
+| GET | /api/fund/payments/my/{classroomId} | Xem nợ cá nhân của mình trong lớp | Member | ✅ Xong |
 
 ---
 
-## 6. Điểm phức tạp kỹ thuật (điểm nhấn đồ án)
+## 6. Code đã viết (Backend)
 
-### 6.1 Tự động tạo payment cho tất cả thành viên
+### DTOs
+| File | Mô tả |
+|------|-------|
+| `CreateCollectionRequest.java` | Input: title, amount, classroomId, deadline |
+| `CollectionResponse.java` | Output: id, title, amount, deadline, createdByName, totalMembers, paidCount, createdAt |
+| `PaymentResponse.java` | Output: id, userId, fullName, collectionTitle, isPaid, confirmedByAdmin, paidAt |
+
+### Repository
+| File | Query methods |
+|------|--------------|
+| `FundCollectionRepository.java` | `findByClassroomId`, `existsByIdAndClassroomId` |
+| `FundPaymentRepository.java` | `findByFundCollectionId`, `findByUserIdAndFundCollection_ClassroomId`, `existsByUserIdAndFundCollectionId`, `sumAmountByFundCollectionIdAndConfirmedByAdminTrue` |
+
+### Service — `FundCollectionService.java`
+| Method | Logic |
+|--------|-------|
+| `createCollection()` | Lưu khoản thu → tự tạo payment cho từng member, dùng `@Transactional` |
+| `getCollectionsByClassroom()` | Lấy danh sách + tính paidCount động |
+| `getPaymentsByCollection()` | Lấy trạng thái đóng tiền từng người |
+| `getMyPayments()` | Lấy nợ cá nhân theo userId + classroomId |
+| `confirmPayment()` | Set isPaid, confirmedByAdmin, paidAt = now() |
+| `toCollectionResponse()` | Helper: entity → CollectionResponse |
+| `toPaymentResponse()` | Helper: entity → PaymentResponse |
+
+### Controller — `FundCollectionController.java`
+- Mapping đầy đủ 5 endpoints vào `@RequestMapping("/api/fund")`
+- Nhận `X-User-Id` header để xác định người dùng (tạm thời, sẽ thay bằng JWT filter)
+
+---
+
+## 7. Điểm phức tạp kỹ thuật (điểm nhấn đồ án)
+
+### 7.1 Tự động tạo payment cho tất cả thành viên
 Khi admin tạo khoản thu, backend phải:
 - Query bảng class_members lấy tất cả user trong lớp
 - Tạo N bản ghi fund_payments (N = số thành viên)
 - Dùng @Transactional để đảm bảo hoặc tạo hết hoặc không tạo gì
+- Kiểm tra `existsByUserIdAndFundCollectionId` để tránh tạo duplicate
 
-### 6.2 QR VietQR
+### 7.2 QR VietQR
 - Sinh mã QR chuyển khoản theo chuẩn VietQR (napas247)
 - Nội dung chuyển khoản chứa mã khoản thu + mã sinh viên
-- Thực hiện ở phía Flutter, không cần backend
+- **Thực hiện ở phía Flutter, không cần backend** (chưa làm)
 
-### 6.3 Tính tổng quỹ
+### 7.3 Tính tổng quỹ
 - Tổng thu = SUM(amount) từ fund_payments WHERE confirmedByAdmin = true
 - Tổng chi = SUM(amount) từ fund_expenses
 - Số dư = Tổng thu - Tổng chi

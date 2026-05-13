@@ -11,4 +11,7 @@ public interface ClassMemberRepository extends JpaRepository<ClassMember, Long> 
     boolean existsByUserIdAndClassroomId(Long userId, Long classroomId);
 
     List<ClassMember> findByUserId(Long userId);
+
+    //lấy all thành viên trong lớp
+    List<ClassMember> findByClassroomId(Long classroomId);
 }
