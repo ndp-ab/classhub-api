@@ -19,22 +19,21 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class FundExpenseService {
 
-    // Inject 3 repository — cần truy vấn 3 bảng khác nhau
     private final FundExpenseRepository fundExpenseRepository;
     private final UserRepository userRepository;
     private final ClassroomRepository classroomRepository;
+    private final AuthorizationService authorizationService;
 
-    // === TẠO KHOẢN CHI ===
+    // === TẠO KHOẢN CHI === (Admin)
     public ExpenseResponse createExpense(CreateExpenseRequest request, Long userId) {
+        // B2: chỉ Admin mới được tạo
+        authorizationService.requireAdmin(userId, request.getClassroomId());
 
-        // Bước 2: Tìm user và classroom từ database
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User không tồn tại"));
-
         Classroom classroom = classroomRepository.findById(request.getClassroomId())
                 .orElseThrow(() -> new BadRequestException("Lớp học không tồn tại"));
 
-        // Bước 3: Tạo entity, gán các trường
         FundExpense expense = FundExpense.builder()
                 .title(request.getTitle())
                 .amount(request.getAmount())
@@ -42,26 +41,19 @@ public class FundExpenseService {
                 .classroom(classroom)
                 .createdBy(user)
                 .build();
-
-        // Bước 4: Lưu vào database
         fundExpenseRepository.save(expense);
-
-        // Bước 5: Chuyển entity thành response trả về Flutter
         return toResponse(expense);
     }
 
-    // === XEM DANH SÁCH KHOẢN CHI CỦA LỚP ===
-    public List<ExpenseResponse> getExpensesByClassroom(Long classroomId) {
-        List<FundExpense> expenses = fundExpenseRepository.findByClassroomId(classroomId);
+    // === XEM DANH SÁCH KHOẢN CHI === (Member của lớp)
+    public List<ExpenseResponse> getExpensesByClassroom(Long classroomId, Long userId) {
+        authorizationService.requireMember(userId, classroomId);
 
-        // Chuyển từng entity thành response bằng stream + map
-        return expenses.stream()
+        return fundExpenseRepository.findByClassroomId(classroomId).stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
-    // === Helper: chuyển entity → response ===
-    // Tách riêng method này vì dùng ở cả 2 chỗ trên, tránh lặp code
     private ExpenseResponse toResponse(FundExpense expense) {
         return ExpenseResponse.builder()
                 .id(expense.getId())

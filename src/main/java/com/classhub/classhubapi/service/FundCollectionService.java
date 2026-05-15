@@ -10,6 +10,7 @@ import com.classhub.classhubapi.entity.FundCollection;
 import com.classhub.classhubapi.entity.FundPayment;
 import com.classhub.classhubapi.entity.User;
 import com.classhub.classhubapi.exception.BadRequestException;
+import com.classhub.classhubapi.exception.ForbiddenException;
 import com.classhub.classhubapi.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,20 +45,19 @@ public class FundCollectionService {
     private final ClassMemberRepository classMemberRepository;
     private final UserRepository userRepository;
     private final ClassroomRepository classroomRepository;
+    private final AuthorizationService authorizationService;
 
-    // === TẠO KHOẢN THU ===
-    // Dùng @Transactional: đảm bảo nếu tạo payment bị lỗi giữa chừng thì rollback hết
+    // === TẠO KHOẢN THU === (Admin)
     @Transactional
     public CollectionResponse createCollection(CreateCollectionRequest request, Long userId) {
-        // Bước 1: Kiểm tra user tồn tại
+        // B2: chỉ Admin của lớp này mới được tạo
+        authorizationService.requireAdmin(userId, request.getClassroomId());
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User không tồn tại"));
-
-        // Bước 2: Kiểm tra lớp tồn tại
         var classroom = classroomRepository.findById(request.getClassroomId())
                 .orElseThrow(() -> new BadRequestException("Lớp học không tồn tại"));
 
-        // Bước 3: Tạo entity khoản thu và lưu vào DB
         FundCollection collection = FundCollection.builder()
                 .title(request.getTitle())
                 .amount(request.getAmount())
@@ -65,24 +65,19 @@ public class FundCollectionService {
                 .createdBy(user)
                 .deadline(request.getDeadline())
                 .build();
-
         fundCollectionRepository.save(collection);
 
-        // Bước 4: Tự động tạo payment cho TẤT CẢ thành viên của lớp
+        // Tự động tạo payment cho tất cả thành viên
         List<ClassMember> members = classMemberRepository.findByClassroomId(request.getClassroomId());
-
         for (ClassMember member : members) {
-            // Kiểm tra payment chưa tồn tại (tránh duplicate khi gọi lại)
             if (!fundPaymentRepository.existsByUserIdAndFundCollectionId(
                     member.getUser().getId(), collection.getId())) {
-
                 FundPayment payment = FundPayment.builder()
                         .user(member.getUser())
                         .fundCollection(collection)
                         .isPaid(false)
                         .confirmedByAdmin(false)
                         .build();
-
                 fundPaymentRepository.save(payment);
             }
         }
@@ -91,65 +86,77 @@ public class FundCollectionService {
     }
 
     // === XEM DANH SÁCH KHOẢN THU CỦA LỚP ===
-    public List<CollectionResponse> getCollectionsByClassroom(Long classroomId) {
-        List<FundCollection> collections = fundCollectionRepository.findByClassroomId(classroomId);
+    public List<CollectionResponse> getCollectionsByClassroom(Long classroomId, Long userId) {
+        authorizationService.requireMember(userId, classroomId);
 
+        List<FundCollection> collections = fundCollectionRepository.findByClassroomId(classroomId);
         return collections.stream().map(collection -> {
             List<FundPayment> payments = fundPaymentRepository.findByFundCollectionId(collection.getId());
             int totalMembers = payments.size();
-            // Đếm số người đã được admin xác nhận đóng tiền
             int paidCount = (int) payments.stream().filter(FundPayment::isConfirmedByAdmin).count();
             return toCollectionResponse(collection, totalMembers, paidCount);
         }).collect(Collectors.toList());
     }
 
-    // === XEM DANH SÁCH AI ĐÃ ĐÓNG / CHƯA ĐÓNG (Admin dùng) ===
-    public List<PaymentResponse> getPaymentsByCollection(Long collectionId) {
-        // Kiểm tra khoản thu có tồn tại không
-        fundCollectionRepository.findById(collectionId)
+    // === ADMIN XEM AI ĐÃ ĐÓNG / CHƯA ĐÓNG ===
+    public List<PaymentResponse> getPaymentsByCollection(Long collectionId, Long userId) {
+        FundCollection collection = fundCollectionRepository.findById(collectionId)
                 .orElseThrow(() -> new BadRequestException("Khoản thu không tồn tại"));
+        // Phải là Admin của lớp chứa khoản thu này
+        authorizationService.requireAdmin(userId, collection.getClassroom().getId());
 
-        List<FundPayment> payments = fundPaymentRepository.findByFundCollectionId(collectionId);
-
-        return payments.stream()
+        return fundPaymentRepository.findByFundCollectionId(collectionId).stream()
                 .map(this::toPaymentResponse)
                 .collect(Collectors.toList());
     }
 
-    // === XEM NỢ CÁ NHÂN CỦA SINH VIÊN TRONG LỚP ===
+    // === SINH VIÊN XEM NỢ CÁ NHÂN ===
     public List<PaymentResponse> getMyPayments(Long userId, Long classroomId) {
-        List<FundPayment> payments = fundPaymentRepository
-                .findByUserIdAndFundCollection_ClassroomId(userId, classroomId);
+        authorizationService.requireMember(userId, classroomId);
 
-        return payments.stream()
+        return fundPaymentRepository
+                .findByUserIdAndFundCollection_ClassroomId(userId, classroomId)
+                .stream()
                 .map(this::toPaymentResponse)
                 .collect(Collectors.toList());
     }
 
-    // === ADMIN XÁC NHẬN ĐÃ ĐÓNG TIỀN ===
+    // === ADMIN XÁC NHẬN ĐÃ ĐÓNG TIỀN === (B3)
     @Transactional
-    public PaymentResponse confirmPayment(Long paymentId) {
+    public PaymentResponse confirmPayment(Long paymentId, Long adminUserId) {
         FundPayment payment = fundPaymentRepository.findById(paymentId)
                 .orElseThrow(() -> new BadRequestException("Bản ghi thanh toán không tồn tại"));
 
-        // Cập nhật trạng thái xác nhận
+        // B2: admin phải thuộc lớp chứa payment này
+        Long classroomId = payment.getFundCollection().getClassroom().getId();
+        authorizationService.requireAdmin(adminUserId, classroomId);
+
+        // B3 idempotency: chặn confirm 2 lần
+        if (payment.isConfirmedByAdmin()) {
+            throw new BadRequestException("Khoản thu này đã được xác nhận");
+        }
+
+        User admin = userRepository.findById(adminUserId)
+                .orElseThrow(() -> new BadRequestException("User không tồn tại"));
+
         payment.setPaid(true);
         payment.setConfirmedByAdmin(true);
         payment.setPaidAt(LocalDateTime.now());
+        payment.setConfirmedBy(admin); // B3: lưu ai xác nhận
 
         fundPaymentRepository.save(payment);
-
         return toPaymentResponse(payment);
     }
 
-    // === SINH QR VIETQR ===
-    // paymentCode được tạo 1 lần và lưu DB — lần sau gọi lại trả code cũ
+    // === SINH QR === (chỉ chủ payment được xem)
     @Transactional
-    public QrResponse generateQr(Long paymentId) {
+    public QrResponse generateQr(Long paymentId, Long userId) {
         FundPayment payment = fundPaymentRepository.findById(paymentId)
                 .orElseThrow(() -> new BadRequestException("Bản ghi thanh toán không tồn tại"));
+        if (!payment.getUser().getId().equals(userId)) {
+            throw new ForbiddenException("Bạn chỉ có thể xem QR của khoản đóng của chính mình");
+        }
 
-        // Nếu chưa có paymentCode thì tạo mới, đã có thì dùng lại
         if (payment.getPaymentCode() == null) {
             String code = String.format("QUY%d-SV%d-%d",
                     payment.getFundCollection().getId(),
@@ -159,8 +166,6 @@ public class FundCollectionService {
             fundPaymentRepository.save(payment);
         }
 
-        // Ghép VietQR URL: https://img.vietqr.io/image/{bin}-{account}-{template}.png
-        // .encode() URL-encode query params (space → %20). fromUriString thay fromHttpUrl (Spring 6)
         String qrUrl = UriComponentsBuilder
                 .fromUriString(String.format("https://img.vietqr.io/image/%s-%s-%s.png",
                         bankBin, accountNo, qrTemplate))
@@ -179,13 +184,15 @@ public class FundCollectionService {
                 .build();
     }
 
-    // === POLLING TRẠNG THÁI THANH TOÁN ===
-    public PaymentStatusResponse getPaymentStatus(Long paymentId) {
+    // === POLLING STATUS === (chỉ chủ payment được xem)
+    public PaymentStatusResponse getPaymentStatus(Long paymentId, Long userId) {
         FundPayment payment = fundPaymentRepository.findById(paymentId)
                 .orElseThrow(() -> new BadRequestException("Bản ghi thanh toán không tồn tại"));
+        if (!payment.getUser().getId().equals(userId)) {
+            throw new ForbiddenException("Bạn chỉ có thể xem trạng thái thanh toán của chính mình");
+        }
 
         String status = payment.isConfirmedByAdmin() ? "CONFIRMED" : "PENDING";
-
         return PaymentStatusResponse.builder()
                 .paymentId(payment.getId())
                 .status(status)
@@ -196,7 +203,7 @@ public class FundCollectionService {
                 .build();
     }
 
-    // === Helper: FundCollection entity → CollectionResponse ===
+    // === Helpers ===
     private CollectionResponse toCollectionResponse(FundCollection collection, int totalMembers, int paidCount) {
         return CollectionResponse.builder()
                 .id(collection.getId())
@@ -210,17 +217,19 @@ public class FundCollectionService {
                 .build();
     }
 
-    // === Helper: FundPayment entity → PaymentResponse ===
     private PaymentResponse toPaymentResponse(FundPayment payment) {
         return PaymentResponse.builder()
                 .id(payment.getId())
                 .userId(payment.getUser().getId())
                 .fullName(payment.getUser().getFullName())
                 .collectionTitle(payment.getFundCollection().getTitle())
-                .isPaid(payment.isConfirmedByAdmin()) // isPaid từ góc nhìn đã xác nhận
+                .amount(payment.getFundCollection().getAmount())                   // B3 bonus
+                .deadline(payment.getFundCollection().getDeadline())               // B3 bonus
+                .isPaid(payment.isConfirmedByAdmin())
                 .confirmedByAdmin(payment.isConfirmedByAdmin())
                 .paidAt(payment.getPaidAt())
+                .confirmedByName(payment.getConfirmedBy() != null                  // B3
+                        ? payment.getConfirmedBy().getFullName() : null)
                 .build();
     }
 }
-

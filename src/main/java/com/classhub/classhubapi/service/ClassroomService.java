@@ -4,9 +4,14 @@ import com.classhub.classhubapi.dto.ClassroomResponse;
 import com.classhub.classhubapi.dto.CreateClassroomRequest;
 import com.classhub.classhubapi.entity.ClassMember;
 import com.classhub.classhubapi.entity.Classroom;
+import com.classhub.classhubapi.entity.FundCollection;
+import com.classhub.classhubapi.entity.FundPayment;
 import com.classhub.classhubapi.entity.User;
+import com.classhub.classhubapi.exception.BadRequestException;
 import com.classhub.classhubapi.repository.ClassMemberRepository;
 import com.classhub.classhubapi.repository.ClassroomRepository;
+import com.classhub.classhubapi.repository.FundCollectionRepository;
+import com.classhub.classhubapi.repository.FundPaymentRepository;
 import com.classhub.classhubapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +28,9 @@ public class ClassroomService {
     private final ClassroomRepository classroomRepository;
     private final ClassMemberRepository classMemberRepository;
     private final UserRepository userRepository;
+    // B6: cần inject để sinh payment bổ sung khi member join muộn
+    private final FundCollectionRepository fundCollectionRepository;
+    private final FundPaymentRepository fundPaymentRepository;
 
     // === TẠO LỚP ===
     @Transactional
@@ -43,7 +51,7 @@ public class ClassroomService {
 
         // Tự động gán người tạo là ADMIN
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new BadRequestException("User không tồn tại"));
 
         ClassMember member = ClassMember.builder()
                 .user(user)
@@ -66,26 +74,38 @@ public class ClassroomService {
     // === JOIN LỚP BẰNG INVITE CODE ===
     @Transactional
     public ClassroomResponse joinClassroom(String inviteCode, Long userId) {
-        // Tìm lớp theo invite code
         Classroom classroom = classroomRepository.findByInviteCode(inviteCode)
-                .orElseThrow(() -> new RuntimeException("Mã tham gia không hợp lệ"));
+                .orElseThrow(() -> new BadRequestException("Mã tham gia không hợp lệ"));
 
-        // Kiểm tra user đã join lớp này chưa
         if (classMemberRepository.existsByUserIdAndClassroomId(userId, classroom.getId())) {
-            throw new RuntimeException("Bạn đã tham gia lớp này rồi");
+            throw new BadRequestException("Bạn đã tham gia lớp này rồi");
         }
 
-        // Thêm user vào lớp với role MEMBER
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new BadRequestException("User không tồn tại"));
 
         ClassMember member = ClassMember.builder()
                 .user(user)
                 .classroom(classroom)
                 .role(ClassMember.Role.MEMBER)
                 .build();
-
         classMemberRepository.save(member);
+
+        // B6: sinh payment bổ sung cho tất cả khoản thu đã tồn tại trong lớp
+        // → member join muộn vẫn thấy nợ
+        List<FundCollection> existingCollections =
+                fundCollectionRepository.findByClassroomId(classroom.getId());
+        for (FundCollection collection : existingCollections) {
+            if (!fundPaymentRepository.existsByUserIdAndFundCollectionId(userId, collection.getId())) {
+                FundPayment payment = FundPayment.builder()
+                        .user(user)
+                        .fundCollection(collection)
+                        .isPaid(false)
+                        .confirmedByAdmin(false)
+                        .build();
+                fundPaymentRepository.save(payment);
+            }
+        }
 
         return ClassroomResponse.builder()
                 .id(classroom.getId())

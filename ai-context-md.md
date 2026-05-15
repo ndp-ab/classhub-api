@@ -15,7 +15,7 @@ ClassHub là ứng dụng di động quản lý hoạt động lớp học đạ
 - **Architecture:** Layered — `entity → repository → service → controller → dto`
 - **Error handling:** `GlobalExceptionHandler` + custom `BadRequestException` → returns 400 JSON
 - **Auth:** JWT token (24h expiry, HMAC-SHA256), BCrypt password hashing
-- **Security:** `/api/auth/**` và `/api/classrooms/**` và `/api/fund/**` = permitAll (tạm thời, chưa có JWT filter)
+- **Security:** ✅ `JwtAuthenticationFilter` validate Bearer token mọi `/api/**` trừ `/api/auth/**`. `AuthorizationService.requireMember/requireAdmin` check role theo lớp trong từng service. `SecurityUtil.currentUserId()` lấy userId từ SecurityContext (không còn `X-User-Id` header).
 - **Repo:** `github.com/agio7/classhub-api`
 
 ### Frontend
@@ -66,13 +66,15 @@ ClassHub là ứng dụng di động quản lý hoạt động lớp học đạ
 
 ## 4. Current Status
 
-### Database (6 tables — ALL CREATED)
+### Database (8 tables — ALL CREATED)
 - [x] `users` (id, full_name, email, password, avatar_url, created_at)
 - [x] `classrooms` (id, class_name, faculty, academic_year, invite_code, created_by, created_at)
 - [x] `class_members` (id, user_id FK, classroom_id FK, role ENUM, joined_at) — unique(user_id, classroom_id)
 - [x] `fund_collections` (id, title, amount, classroom_id FK, created_by FK, deadline, created_at)
 - [x] `fund_payments` (id, user_id FK, collection_id FK, is_paid, confirmed_by_admin, paid_at)
 - [x] `fund_expenses` (id, title, amount, classroom_id FK, created_by FK, reason, created_at)
+- [x] `events` (id, title, description, location, event_time, classroom_id FK, created_by FK, created_at)
+- [x] `event_participants` (id, event_id FK, user_id FK, checked_in, checked_in_at, registered_at) — unique(event_id, user_id)
 
 ### Backend APIs
 - [x] `POST /api/auth/register` — register + return JWT
@@ -89,49 +91,75 @@ ClassHub là ứng dụng di động quản lý hoạt động lớp học đạ
 - [x] `GET /api/fund/payments/my/{classroomId}` — my debts
 - [x] `GET /api/fund/payments/{paymentId}/qr` — generate VietQR URL + paymentCode
 - [x] `GET /api/fund/payments/{paymentId}/status` — polling payment status (PENDING/CONFIRMED)
-- [ ] Event APIs (not started) ⬅️ **NEXT**
+- [x] `POST /api/events` — create event (Admin)
+- [x] `GET /api/events/{classroomId}` — list events by classroom
+- [x] `POST /api/events/{eventId}/volunteer` — register to attend
+- [x] `DELETE /api/events/{eventId}/volunteer` — cancel registration
+- [x] `GET /api/events/{eventId}/participants` — list participants (Admin)
+- [x] `PUT /api/events/{eventId}/checkin/{userId}` — check-in (Admin)
+- [x] `GET /api/events/my/{classroomId}` — my registered events
 
 ### Backend Files Created
 ```
 com.classhub.classhubapi/
 ├── config/        SecurityConfig.java, JwtUtil.java
 ├── controller/    AuthController.java, ClassroomController.java,
-│                  FundExpenseController.java, FundCollectionController.java
+│                  FundExpenseController.java, FundCollectionController.java,
+│                  EventController.java
 ├── dto/           RegisterRequest, LoginRequest, AuthResponse,
 │                  CreateClassroomRequest, JoinClassroomRequest, ClassroomResponse,
 │                  CreateExpenseRequest, ExpenseResponse,
 │                  CreateCollectionRequest, CollectionResponse,
-│                  PaymentResponse, QrResponse, PaymentStatusResponse
+│                  PaymentResponse, QrResponse, PaymentStatusResponse,
+│                  CreateEventRequest, EventResponse, EventParticipantResponse
 ├── entity/        User, Classroom, ClassMember,
-│                  FundCollection, FundPayment (+ paymentCode field), FundExpense
+│                  FundCollection, FundPayment (+ paymentCode field), FundExpense,
+│                  Event, EventParticipant
 ├── exception/     BadRequestException, GlobalExceptionHandler
 ├── repository/    UserRepository, ClassroomRepository, ClassMemberRepository,
-│                  FundExpenseRepository, FundCollectionRepository, FundPaymentRepository
-└── service/       AuthService, ClassroomService, FundExpenseService, FundCollectionService
+│                  FundExpenseRepository, FundCollectionRepository, FundPaymentRepository,
+│                  EventRepository, EventParticipantRepository
+└── service/       AuthService, ClassroomService, FundExpenseService, FundCollectionService,
+                   EventService
 ```
 
 ### Frontend Screens
 - [x] `login_screen.dart` — email + password form
 - [x] `signup_screen.dart` — fullName + email + password form
-- [x] `home_screen.dart` — classroom list + create/join buttons
+- [x] `home_screen.dart` — classroom list (tap card → detail)
 - [x] `create_classroom_screen.dart` — form + shows invite code on success
 - [x] `join_classroom_screen.dart` — invite code input
-- [ ] Classroom detail screen (Bottom Navigation with tabs)
-- [ ] Fund tab (collections + expenses + summary)
-- [ ] Event tab
+- [x] `classroom_detail_screen.dart` — TabBar 4 tab (Tổng quan / Khoản thu / Khoản chi / Sự kiện)
+- [x] `fund/fund_tab.dart` — list khoản thu + "Khoản của bạn" cho Member
+- [x] `fund/payment_qr_screen.dart` — QR + polling status 5s
+- [x] `fund/collection_payments_screen.dart` — admin confirm payment
+- [x] `fund/create_collection_screen.dart`
+- [x] `fund/expenses_screen.dart` + `fund/create_expense_screen.dart`
+- [x] `events/events_tab.dart` — Member đăng ký/huỷ, Admin tạo + xem participants
+- [x] `events/create_event_screen.dart`
+- [x] `events/event_participants_screen.dart` — Admin check-in
 
 ### Frontend Files Created
 ```
 lib/
 ├── main.dart
-├── screens/       login, signup, home, create_classroom, join_classroom
+├── models/        fund_collection.dart, payment.dart, expense.dart, event.dart
+├── screens/
+│   ├── login_screen.dart, signup_screen.dart, home_screen.dart
+│   ├── create_classroom_screen.dart, join_classroom_screen.dart
+│   ├── classroom_detail_screen.dart
+│   ├── fund/      fund_tab, payment_qr_screen, collection_payments_screen,
+│   │              create_collection_screen, expenses_screen, create_expense_screen
+│   └── events/    events_tab, create_event_screen, event_participants_screen
 ├── providers/     auth_provider.dart
-└── services/      auth_service.dart, classroom_service.dart
+└── services/      auth_service.dart, classroom_service.dart,
+                   fund_service.dart, event_service.dart
 ```
 
 ### Other
 - [x] GitHub repos pushed (classhub-api + classhub-app)
 - [x] Google Form survey created (not yet sent to class group)
+- [x] Event analysis document (event-analysis.md)
 - [ ] Figma wireframes (not started)
 - [ ] Use Case Diagram, Sequence Diagram (not started)
 - [ ] Report document (not started)
@@ -140,30 +168,42 @@ lib/
 
 ## 5. Blockers & Next Steps
 
-### Immediate Next Task
-**Flutter: màn hình Quỹ lớp** — hiển thị danh sách khoản thu và tích hợp QR payment:
-1. Màn hình chi tiết lớp (Bottom Navigation: Quỹ / Sự kiện)
-2. Tab Quỹ: list khoản thu + khoản chi
-3. Màn hình đóng quỹ: hiển thị QR từ `/qr` endpoint
-4. Polling `/status` mỗi 5s → chuyển màn khi CONFIRMED
+> 2026-05-15: Đã vá xong B1–B8 (xem `documents/BACKEND_FIX_LOG.md`). BE compile sạch 52 file. JWT validated, authorization theo lớp đầy đủ, audit trail confirmedBy/checkedBy có. Bonus: PaymentResponse có amount+deadline, EventParticipantResponse có eventId.
 
-### Known Issues
-- `X-User-Id` header is insecure — need JWT filter to extract userId from token
-- `Classroom.createdBy` uses `Long` instead of `@ManyToOne` (inconsistent with newer entities)
-- No CORS config (may need when Flutter web testing)
-- IP changes on WiFi reconnect — need to update `baseUrl` in both service files
-- VietQR `vietqr.account-no` in `application.properties` cần thay bằng số TK thật trước demo
+### Đã làm trong commit B1–B8 (2026-05-15)
+- ✅ `JwtAuthenticationFilter` + `SecurityUtil.currentUserId()` + `JwtAuthenticationEntryPoint`
+- ✅ `AuthorizationService.requireMember/requireAdmin` gọi trong mọi service
+- ✅ `FundPayment.confirmedBy` (@ManyToOne User) + idempotency check
+- ✅ `EventParticipant.checkedBy` (@ManyToOne User)
+- ✅ `@DecimalMin("0.01")` cho amount Collection/Expense
+- ✅ `ClassroomService.joinClassroom` sinh payment bổ sung cho member join muộn
+- ✅ `GlobalExceptionHandler` cover ForbiddenException, MethodArgumentNotValidException, MissingRequestHeader, HttpMessageNotReadable, generic Exception
+- ✅ CORS toàn cục trong `SecurityConfig`, bỏ `@CrossOrigin` rải rác
+- ✅ `PaymentResponse` thêm `amount`, `deadline`, `confirmedByName`
+- ✅ `EventParticipantResponse` thêm `eventId`, `checkedByName`
+- ✅ FE: bỏ `X-User-Id` ở 3 service (classroom/fund/event), chỉ giữ `Authorization: Bearer`
+- ✅ FE: `fund_tab` hiển thị amount+deadline trong "Khoản của bạn"; `events_tab` match my-events qua eventId chuẩn (bỏ workaround title)
 
-### Upcoming Tasks (Priority Order)
-1. Flutter: classroom detail screen (Bottom Navigation)
-2. Flutter: fund tab — danh sách khoản thu + khoản chi
-3. Flutter: QR payment screen (polling status)
-4. Event APIs (create event, volunteer, check-in)
-5. Flutter: event tab
-6. JWT filter (replace X-User-Id header)
-7. Figma wireframes (backfill)
-8. Use Case Diagram + Sequence Diagram
-9. Report + slides
+### Next Steps (tiếp theo)
+1. API còn thiếu cho FE/demo:
+   - `GET /api/classrooms/{id}/members` — unlock tab Thành viên (đang là placeholder)
+   - `GET /api/classrooms/{id}/fund-statistics` — số liệu cho slide demo
+   - `POST /api/events/{eventId}/assign` — admin chỉ định participant
+2. Mở rộng `EventParticipant`: `type` (VOLUNTEER/ASSIGNED), `attendanceStatus` (PENDING/PRESENT/ABSENT)
+3. `Event` thêm `endTime` + validate `eventTime >= now`
+4. Postman collection + Test case TC01–TC20 (checklist mục 11)
+5. Figma wireframes (backfill)
+6. Use Case Diagram + Sequence Diagram
+7. Report + slides
+
+### Known Issues (còn lại sau B1–B8)
+- `Classroom.createdBy` dùng `Long` thay vì `@ManyToOne User` (cosmetic, không ảnh hưởng demo)
+- `FundPayment.isPaid` và `confirmedByAdmin` redundant — luôn cùng giá trị (nên dùng enum status)
+- `FundCollection` thiếu `description` (FE đã bỏ)
+- IP thay đổi khi đổi WiFi — cần update `baseUrl` trong 4 service file FE
+- VietQR `vietqr.account-no` trong `application.properties` cần thay TK thật trước demo
+- `Event` thiếu `endTime`
+- `JwtAuthenticationFilter` deprecation warning (WebAuthenticationDetailsSource) — vô hại
 
 ### Instructor Requirements (thầy Dũng/Hiếu)
 - Must justify every design decision with evidence (survey, analysis)

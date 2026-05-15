@@ -1,4 +1,5 @@
 package com.classhub.classhubapi.dto;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -14,6 +15,7 @@ public class CreateCollectionRequest {
     private String title;
 
     @NotNull(message = "Số tiền khoản thu không được để trống")
+    @DecimalMin(value = "0.01", message = "Số tiền phải lớn hơn 0")
     private BigDecimal amount;
 
     @NotNull(message = "ID lớp học không được để trống")

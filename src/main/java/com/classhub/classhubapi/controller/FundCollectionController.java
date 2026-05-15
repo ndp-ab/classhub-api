@@ -1,5 +1,6 @@
 package com.classhub.classhubapi.controller;
 
+import com.classhub.classhubapi.config.SecurityUtil;
 import com.classhub.classhubapi.dto.CollectionResponse;
 import com.classhub.classhubapi.dto.CreateCollectionRequest;
 import com.classhub.classhubapi.dto.PaymentResponse;
@@ -20,56 +21,52 @@ public class FundCollectionController {
 
     private final FundCollectionService fundCollectionService;
 
-    // Tạo khoản thu mới + tự động tạo payment cho tất cả thành viên
+    // Tạo khoản thu mới (Admin) — auto-sinh payment cho all members
     @PostMapping("/collections")
-    public ResponseEntity<CollectionResponse> create(
-            @Valid @RequestBody CreateCollectionRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
-        CollectionResponse response = fundCollectionService.createCollection(request, userId);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<CollectionResponse> create(@Valid @RequestBody CreateCollectionRequest request) {
+        return ResponseEntity.ok(
+                fundCollectionService.createCollection(request, SecurityUtil.currentUserId()));
     }
 
-    // Xem danh sách tất cả khoản thu của 1 lớp
+    // Danh sách khoản thu của 1 lớp (Member của lớp)
     @GetMapping("/collections/{classroomId}")
-    public ResponseEntity<List<CollectionResponse>> getByClassroom(
-            @PathVariable Long classroomId) {
-        return ResponseEntity.ok(fundCollectionService.getCollectionsByClassroom(classroomId));
+    public ResponseEntity<List<CollectionResponse>> getByClassroom(@PathVariable Long classroomId) {
+        return ResponseEntity.ok(
+                fundCollectionService.getCollectionsByClassroom(classroomId, SecurityUtil.currentUserId()));
     }
 
-    // Xem danh sách ai đã đóng / chưa đóng của 1 khoản thu (Admin)
+    // Admin xem ai đã đóng / chưa đóng
     @GetMapping("/collections/{collectionId}/payments")
-    public ResponseEntity<List<PaymentResponse>> getPayments(
-            @PathVariable Long collectionId) {
-        return ResponseEntity.ok(fundCollectionService.getPaymentsByCollection(collectionId));
+    public ResponseEntity<List<PaymentResponse>> getPayments(@PathVariable Long collectionId) {
+        return ResponseEntity.ok(
+                fundCollectionService.getPaymentsByCollection(collectionId, SecurityUtil.currentUserId()));
     }
 
-    // Admin xác nhận 1 sinh viên đã đóng tiền
+    // Admin xác nhận đã đóng tiền
     @PutMapping("/payments/{paymentId}/confirm")
-    public ResponseEntity<PaymentResponse> confirm(
-            @PathVariable Long paymentId) {
-        return ResponseEntity.ok(fundCollectionService.confirmPayment(paymentId));
+    public ResponseEntity<PaymentResponse> confirm(@PathVariable Long paymentId) {
+        return ResponseEntity.ok(
+                fundCollectionService.confirmPayment(paymentId, SecurityUtil.currentUserId()));
     }
 
-    // Sinh viên xem nợ cá nhân trong 1 lớp
+    // Sinh viên xem nợ cá nhân
     @GetMapping("/payments/my/{classroomId}")
-    public ResponseEntity<List<PaymentResponse>> getMyPayments(
-            @PathVariable Long classroomId,
-            @RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(fundCollectionService.getMyPayments(userId, classroomId));
+    public ResponseEntity<List<PaymentResponse>> getMyPayments(@PathVariable Long classroomId) {
+        return ResponseEntity.ok(
+                fundCollectionService.getMyPayments(SecurityUtil.currentUserId(), classroomId));
     }
 
-    // Sinh viên lấy QR chuyển khoản — paymentCode tạo 1 lần, lưu DB
+    // Sinh viên lấy QR (chỉ chủ payment được xem)
     @GetMapping("/payments/{paymentId}/qr")
-    public ResponseEntity<QrResponse> getQr(
-            @PathVariable Long paymentId) {
-        return ResponseEntity.ok(fundCollectionService.generateQr(paymentId));
+    public ResponseEntity<QrResponse> getQr(@PathVariable Long paymentId) {
+        return ResponseEntity.ok(
+                fundCollectionService.generateQr(paymentId, SecurityUtil.currentUserId()));
     }
 
-    // Flutter polling mỗi 5s để biết admin đã xác nhận chưa
+    // Flutter polling status
     @GetMapping("/payments/{paymentId}/status")
-    public ResponseEntity<PaymentStatusResponse> getStatus(
-            @PathVariable Long paymentId) {
-        return ResponseEntity.ok(fundCollectionService.getPaymentStatus(paymentId));
+    public ResponseEntity<PaymentStatusResponse> getStatus(@PathVariable Long paymentId) {
+        return ResponseEntity.ok(
+                fundCollectionService.getPaymentStatus(paymentId, SecurityUtil.currentUserId()));
     }
 }
-

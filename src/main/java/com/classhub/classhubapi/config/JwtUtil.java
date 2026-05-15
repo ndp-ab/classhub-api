@@ -41,6 +41,18 @@ public class JwtUtil {
                 .getSubject();
     }
 
+    // Lấy userId từ JWT claim — dùng trong JwtAuthenticationFilter để set SecurityContext
+    public Long getUserIdFromToken(String token) {
+        Object claim = Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("userId");
+        if (claim == null) return null;
+        return ((Number) claim).longValue();
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parser()

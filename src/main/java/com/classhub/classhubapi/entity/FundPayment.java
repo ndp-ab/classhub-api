@@ -32,6 +32,12 @@ public class FundPayment {
     private boolean confirmedByAdmin = false;
     private LocalDateTime paidAt;
 
+    // Audit trail (B3): admin nào đã xác nhận khoản thu này
+    // null khi chưa được xác nhận
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "confirmed_by")
+    private User confirmedBy;
+
     // Mã duy nhất mỗi lần mở QR: "QUY{collectionId}-SV{userId}-{timestamp}"
     // Dùng để admin đối soát với sao kê ngân hàng
     @Column(name = "payment_code")

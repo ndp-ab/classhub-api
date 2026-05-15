@@ -1,5 +1,6 @@
 package com.classhub.classhubapi.controller;
 
+import com.classhub.classhubapi.config.SecurityUtil;
 import com.classhub.classhubapi.dto.ClassroomResponse;
 import com.classhub.classhubapi.dto.CreateClassroomRequest;
 import com.classhub.classhubapi.dto.JoinClassroomRequest;
@@ -12,34 +13,25 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@CrossOrigin(origins = "*")
 @RequestMapping("/api/classrooms")
 @RequiredArgsConstructor
-
 public class ClassroomController {
 
     private final ClassroomService classroomService;
 
-    // Tạo lớp mới — Ban cán sự gọi API này
     @PostMapping("/create")
-    public ResponseEntity<ClassroomResponse> create(
-            @Valid @RequestBody CreateClassroomRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(classroomService.createClassroom(request, userId));
+    public ResponseEntity<ClassroomResponse> create(@Valid @RequestBody CreateClassroomRequest request) {
+        return ResponseEntity.ok(classroomService.createClassroom(request, SecurityUtil.currentUserId()));
     }
 
-    // Join lớp bằng invite code — Sinh viên gọi API này
     @PostMapping("/join")
-    public ResponseEntity<ClassroomResponse> join(
-            @Valid @RequestBody JoinClassroomRequest request,
-            @RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(classroomService.joinClassroom(request.getInviteCode(), userId));
+    public ResponseEntity<ClassroomResponse> join(@Valid @RequestBody JoinClassroomRequest request) {
+        return ResponseEntity.ok(classroomService.joinClassroom(
+                request.getInviteCode(), SecurityUtil.currentUserId()));
     }
 
-    // Xem danh sách lớp của mình
     @GetMapping("/my")
-    public ResponseEntity<List<ClassroomResponse>> myClassrooms(
-            @RequestHeader("X-User-Id") Long userId) {
-        return ResponseEntity.ok(classroomService.getMyClassrooms(userId));
+    public ResponseEntity<List<ClassroomResponse>> myClassrooms() {
+        return ResponseEntity.ok(classroomService.getMyClassrooms(SecurityUtil.currentUserId()));
     }
 }
