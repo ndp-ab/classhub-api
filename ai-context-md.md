@@ -170,6 +170,19 @@ lib/
 
 > 2026-05-15: Đã vá xong B1–B8 (xem `documents/BACKEND_FIX_LOG.md`). BE compile sạch 52 file. JWT validated, authorization theo lớp đầy đủ, audit trail confirmedBy/checkedBy có. Bonus: PaymentResponse có amount+deadline, EventParticipantResponse có eventId.
 
+### Đã làm trong commit GP1 (2026-05-16) — Member self-report đã CK
+- ✅ Endpoint mới `POST /api/fund/payments/{paymentId}/mark-paid` — Member báo đã CK
+- ✅ `FundPayment.markedPaidAt` field mới
+- ✅ Semantic 2 boolean cũ giờ KHÔNG redundant:
+  - `isPaid` = Member đã báo CK
+  - `confirmedByAdmin` = Admin đã verify
+  - → 3 trạng thái: `UNPAID` | `PENDING_VERIFICATION` | `CONFIRMED`
+- ✅ `PaymentResponse` + `PaymentStatusResponse` thêm field `status` (string enum) + `markedPaid` + `markedPaidAt` + `confirmedByName`
+- ✅ FE: `PaymentQrScreen` thêm nút "Tôi đã chuyển khoản" + confirm dialog. 3-state status box (orange/blue/green).
+- ✅ FE: `FundTab` section "Khoản của bạn" hiển thị 3 nhóm với màu khác nhau.
+- ✅ FE: `CollectionPaymentsScreen` (Admin) nhóm payments thành 3 sections, PENDING lên đầu để admin ưu tiên xử lý.
+- ✅ `confirmPayment` tự set `isPaid=true` nếu admin xác nhận cho payment chưa báo (vd nộp tiền mặt).
+
 ### Đã làm trong commit B1–B8 (2026-05-15)
 - ✅ `JwtAuthenticationFilter` + `SecurityUtil.currentUserId()` + `JwtAuthenticationEntryPoint`
 - ✅ `AuthorizationService.requireMember/requireAdmin` gọi trong mọi service

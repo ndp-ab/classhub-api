@@ -121,7 +121,33 @@ public class FundCollectionService {
                 .collect(Collectors.toList());
     }
 
-    // === ADMIN XÁC NHẬN ĐÃ ĐÓNG TIỀN === (B3)
+    // === MEMBER BÁO ĐÃ CHUYỂN KHOẢN === (GP1)
+    // Member tự bấm "Tôi đã chuyển khoản" sau khi CK qua app ngân hàng.
+    // Chỉ chủ payment được gọi. Idempotent: nếu đã báo trước đó thì báo lỗi.
+    @Transactional
+    public PaymentResponse markPaymentAsPaid(Long paymentId, Long userId) {
+        FundPayment payment = fundPaymentRepository.findById(paymentId)
+                .orElseThrow(() -> new BadRequestException("Bản ghi thanh toán không tồn tại"));
+
+        if (!payment.getUser().getId().equals(userId)) {
+            throw new ForbiddenException("Bạn chỉ có thể báo chuyển khoản cho khoản đóng của chính mình");
+        }
+
+        if (payment.isConfirmedByAdmin()) {
+            throw new BadRequestException("Khoản này đã được Admin xác nhận, không cần báo lại");
+        }
+
+        if (payment.isPaid()) {
+            throw new BadRequestException("Bạn đã báo chuyển khoản trước đó, vui lòng chờ Admin xác nhận");
+        }
+
+        payment.setPaid(true);                          // GP1: isPaid giờ = "Member đã báo CK"
+        payment.setMarkedPaidAt(LocalDateTime.now());
+        fundPaymentRepository.save(payment);
+        return toPaymentResponse(payment);
+    }
+
+    // === ADMIN XÁC NHẬN ĐÃ ĐÓNG TIỀN === (B3 + GP1)
     @Transactional
     public PaymentResponse confirmPayment(Long paymentId, Long adminUserId) {
         FundPayment payment = fundPaymentRepository.findById(paymentId)
@@ -139,7 +165,12 @@ public class FundCollectionService {
         User admin = userRepository.findById(adminUserId)
                 .orElseThrow(() -> new BadRequestException("User không tồn tại"));
 
-        payment.setPaid(true);
+        // Trường hợp Member chưa báo (vd nộp tiền mặt) — Admin vẫn xác nhận được.
+        // Đảm bảo isPaid=true để invariant "confirmed implies paid" luôn đúng.
+        if (!payment.isPaid()) {
+            payment.setPaid(true);
+            payment.setMarkedPaidAt(LocalDateTime.now());
+        }
         payment.setConfirmedByAdmin(true);
         payment.setPaidAt(LocalDateTime.now());
         payment.setConfirmedBy(admin); // B3: lưu ai xác nhận
@@ -192,14 +223,15 @@ public class FundCollectionService {
             throw new ForbiddenException("Bạn chỉ có thể xem trạng thái thanh toán của chính mình");
         }
 
-        String status = payment.isConfirmedByAdmin() ? "CONFIRMED" : "PENDING";
         return PaymentStatusResponse.builder()
                 .paymentId(payment.getId())
-                .status(status)
-                .isPaid(payment.isConfirmedByAdmin())
+                .status(computeStatus(payment))
+                .markedPaid(payment.isPaid())
+                .markedPaidAt(payment.getMarkedPaidAt())
                 .confirmedByAdmin(payment.isConfirmedByAdmin())
                 .paidAt(payment.getPaidAt())
                 .paymentCode(payment.getPaymentCode())
+                .isPaid(payment.isConfirmedByAdmin()) // backward compat
                 .build();
     }
 
@@ -223,13 +255,23 @@ public class FundCollectionService {
                 .userId(payment.getUser().getId())
                 .fullName(payment.getUser().getFullName())
                 .collectionTitle(payment.getFundCollection().getTitle())
-                .amount(payment.getFundCollection().getAmount())                   // B3 bonus
-                .deadline(payment.getFundCollection().getDeadline())               // B3 bonus
-                .isPaid(payment.isConfirmedByAdmin())
+                .amount(payment.getFundCollection().getAmount())
+                .deadline(payment.getFundCollection().getDeadline())
+                .markedPaid(payment.isPaid())                                       // GP1
+                .markedPaidAt(payment.getMarkedPaidAt())                            // GP1
                 .confirmedByAdmin(payment.isConfirmedByAdmin())
                 .paidAt(payment.getPaidAt())
-                .confirmedByName(payment.getConfirmedBy() != null                  // B3
+                .confirmedByName(payment.getConfirmedBy() != null
                         ? payment.getConfirmedBy().getFullName() : null)
+                .status(computeStatus(payment))                                     // GP1
+                .isPaid(payment.isConfirmedByAdmin())                               // backward compat
                 .build();
+    }
+
+    // GP1: compute status enum cho FE dễ render
+    private String computeStatus(FundPayment payment) {
+        if (payment.isConfirmedByAdmin()) return "CONFIRMED";
+        if (payment.isPaid()) return "PENDING_VERIFICATION";
+        return "UNPAID";
     }
 }

@@ -49,6 +49,13 @@ public class FundCollectionController {
                 fundCollectionService.confirmPayment(paymentId, SecurityUtil.currentUserId()));
     }
 
+    // GP1: Member tự báo "Tôi đã chuyển khoản" → status PENDING_VERIFICATION
+    @PostMapping("/payments/{paymentId}/mark-paid")
+    public ResponseEntity<PaymentResponse> markPaid(@PathVariable Long paymentId) {
+        return ResponseEntity.ok(
+                fundCollectionService.markPaymentAsPaid(paymentId, SecurityUtil.currentUserId()));
+    }
+
     // Sinh viên xem nợ cá nhân
     @GetMapping("/payments/my/{classroomId}")
     public ResponseEntity<List<PaymentResponse>> getMyPayments(@PathVariable Long classroomId) {

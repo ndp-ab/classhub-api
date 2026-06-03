@@ -18,10 +18,23 @@ public class PaymentResponse {
     private Long userId;
     private String fullName;        // Họ tên sinh viên
     private String collectionTitle; // Tên khoản thu
-    private BigDecimal amount;      // Số tiền (lấy từ FundCollection.amount) — Flutter cần để hiển thị
+    private BigDecimal amount;      // Số tiền (lấy từ FundCollection.amount)
     private LocalDate deadline;     // Hạn đóng (lấy từ FundCollection.deadline)
-    private boolean isPaid;
+
+    // Member đã bấm "Tôi đã chuyển khoản"
+    private boolean markedPaid;
+    private LocalDateTime markedPaidAt;
+
+    // Admin đã xác nhận
     private boolean confirmedByAdmin;
     private LocalDateTime paidAt;
-    private String confirmedByName; // Audit (B3): ai đã xác nhận
+    private String confirmedByName;
+
+    // Trạng thái rút gọn cho FE dễ dùng:
+    // "UNPAID" | "PENDING_VERIFICATION" | "CONFIRMED"
+    private String status;
+
+    // Backward compat: giữ field isPaid nghĩa cũ = đã được Admin xác nhận
+    // (Code Flutter cũ dùng isPaid để filter)
+    private boolean isPaid;
 }

@@ -13,9 +13,18 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class PaymentStatusResponse {
     private Long paymentId;
-    private String status;          // "PENDING" | "CONFIRMED"
-    private boolean isPaid;
+
+    // "UNPAID" | "PENDING_VERIFICATION" | "CONFIRMED"
+    private String status;
+
+    private boolean markedPaid;            // Member đã báo CK chưa
+    private LocalDateTime markedPaidAt;
+
     private boolean confirmedByAdmin;
     private LocalDateTime paidAt;
-    private String paymentCode;     // Để Flutter hiển thị nội dung CK
+
+    private String paymentCode;            // Để Flutter hiển thị nội dung CK
+
+    // Backward compat: isPaid nghĩa cũ = đã được Admin xác nhận
+    private boolean isPaid;
 }
