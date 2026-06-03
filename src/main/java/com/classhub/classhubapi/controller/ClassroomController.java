@@ -1,6 +1,7 @@
 package com.classhub.classhubapi.controller;
 
 import com.classhub.classhubapi.config.SecurityUtil;
+import com.classhub.classhubapi.dto.ClassMemberResponse;
 import com.classhub.classhubapi.dto.ClassroomResponse;
 import com.classhub.classhubapi.dto.CreateClassroomRequest;
 import com.classhub.classhubapi.dto.JoinClassroomRequest;
@@ -33,5 +34,10 @@ public class ClassroomController {
     @GetMapping("/my")
     public ResponseEntity<List<ClassroomResponse>> myClassrooms() {
         return ResponseEntity.ok(classroomService.getMyClassrooms(SecurityUtil.currentUserId()));
+    }
+
+    @GetMapping("/{classroomId}/members")
+    public ResponseEntity<List<ClassMemberResponse>> getMembers(@PathVariable Long classroomId) {
+        return ResponseEntity.ok(classroomService.getMembers(classroomId, SecurityUtil.currentUserId()));
     }
 }

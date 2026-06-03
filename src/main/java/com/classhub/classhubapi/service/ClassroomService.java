@@ -1,5 +1,6 @@
 package com.classhub.classhubapi.service;
 
+import com.classhub.classhubapi.dto.ClassMemberResponse;
 import com.classhub.classhubapi.dto.ClassroomResponse;
 import com.classhub.classhubapi.dto.CreateClassroomRequest;
 import com.classhub.classhubapi.entity.ClassMember;
@@ -31,6 +32,7 @@ public class ClassroomService {
     // B6: cần inject để sinh payment bổ sung khi member join muộn
     private final FundCollectionRepository fundCollectionRepository;
     private final FundPaymentRepository fundPaymentRepository;
+    private final AuthorizationService authorizationService;
 
     // === TẠO LỚP ===
     @Transactional
@@ -130,5 +132,24 @@ public class ClassroomService {
                 .role(m.getRole().name())
                 .build()
         ).collect(Collectors.toList());
+    }
+
+    // === XEM DANH SÁCH THÀNH VIÊN CỦA LỚP ===
+    public List<ClassMemberResponse> getMembers(Long classroomId, Long userId) {
+        // User phải thuộc lớp mới xem được danh sách thành viên
+        authorizationService.requireMember(userId, classroomId);
+
+        List<ClassMember> members = classMemberRepository.findByClassroomId(classroomId);
+
+        return members.stream()
+                .map(m -> ClassMemberResponse.builder()
+                        .userId(m.getUser().getId())
+                        .fullName(m.getUser().getFullName())
+                        .email(m.getUser().getEmail())
+                        .role(m.getRole().name())
+                        .joinedAt(m.getJoinedAt())
+                        .build()
+                )
+                .collect(Collectors.toList());
     }
 }
