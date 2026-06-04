@@ -11,6 +11,7 @@ import com.classhub.classhubapi.entity.FundPayment;
 import com.classhub.classhubapi.entity.User;
 import com.classhub.classhubapi.exception.BadRequestException;
 import com.classhub.classhubapi.exception.ForbiddenException;
+import com.classhub.classhubapi.entity.ClassroomBankAccount;
 import com.classhub.classhubapi.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,23 +29,15 @@ import java.util.stream.Collectors;
 public class FundCollectionService {
 
     // Config từ application.properties
-    @Value("${vietqr.bank-bin}")
-    private String bankBin;
-
-    @Value("${vietqr.account-no}")
-    private String accountNo;
-
-    @Value("${vietqr.account-name}")
-    private String accountName;
-
-    @Value("${vietqr.template}")
-    private String qrTemplate;
+    @Value("${vietqr.template:compact2}")
+    private String vietQrTemplate;
 
     private final FundCollectionRepository fundCollectionRepository;
     private final FundPaymentRepository fundPaymentRepository;
     private final ClassMemberRepository classMemberRepository;
     private final UserRepository userRepository;
     private final ClassroomRepository classroomRepository;
+    private final ClassroomBankAccountRepository bankAccountRepository;
     private final AuthorizationService authorizationService;
 
     // === TẠO KHOẢN THU === (Admin)
@@ -52,6 +45,12 @@ public class FundCollectionService {
     public CollectionResponse createCollection(CreateCollectionRequest request, Long userId) {
         // B2: chỉ Admin của lớp này mới được tạo
         authorizationService.requireAdmin(userId, request.getClassroomId());
+
+        // Kiểm tra lớp đã có tài khoản ngân hàng chưa
+        if (!bankAccountRepository.existsByClassroomIdAndActiveTrue(request.getClassroomId())) {
+            throw new BadRequestException(
+                    "Vui lòng cấu hình tài khoản ngân hàng nhận tiền trước khi tạo khoản thu");
+        }
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User không tồn tại"));
@@ -188,6 +187,14 @@ public class FundCollectionService {
             throw new ForbiddenException("Bạn chỉ có thể xem QR của khoản đóng của chính mình");
         }
 
+        // Lấy tài khoản ngân hàng active của lớp
+        Long classroomId = payment.getFundCollection().getClassroom().getId();
+        ClassroomBankAccount bankAccount = bankAccountRepository
+                .findByClassroomIdAndActiveTrue(classroomId)
+                .orElseThrow(() -> new BadRequestException(
+                        "Lớp chưa cấu hình tài khoản nhận tiền. Vui lòng liên hệ Admin."));
+
+        // Sinh paymentCode nếu chưa có
         if (payment.getPaymentCode() == null) {
             String code = String.format("QUY%d-SV%d-%d",
                     payment.getFundCollection().getId(),
@@ -197,12 +204,15 @@ public class FundCollectionService {
             fundPaymentRepository.save(payment);
         }
 
+        // Sinh QR URL bằng UriComponentsBuilder
         String qrUrl = UriComponentsBuilder
                 .fromUriString(String.format("https://img.vietqr.io/image/%s-%s-%s.png",
-                        bankBin, accountNo, qrTemplate))
+                        bankAccount.getBankBin(),
+                        bankAccount.getAccountNo(),
+                        vietQrTemplate))
                 .queryParam("amount", payment.getFundCollection().getAmount().toPlainString())
                 .queryParam("addInfo", payment.getPaymentCode())
-                .queryParam("accountName", accountName)
+                .queryParam("accountName", bankAccount.getAccountName())
                 .build().encode().toUriString();
 
         return QrResponse.builder()
@@ -212,6 +222,9 @@ public class FundCollectionService {
                 .paymentCode(payment.getPaymentCode())
                 .collectionTitle(payment.getFundCollection().getTitle())
                 .deadline(payment.getFundCollection().getDeadline())
+                .bankName(bankAccount.getBankName())
+                .accountNo(bankAccount.getAccountNo())
+                .accountName(bankAccount.getAccountName())
                 .build();
     }
 

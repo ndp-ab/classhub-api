@@ -19,4 +19,9 @@ public class QrResponse {
     private String paymentCode;     // Nội dung chuyển khoản duy nhất
     private String collectionTitle; // Tên khoản thu
     private LocalDate deadline;     // Hạn đóng tiền
+    
+    // Thông tin tài khoản nhận tiền (từ ClassroomBankAccount)
+    private String bankName;        // Tên ngân hàng
+    private String accountNo;       // Số tài khoản
+    private String accountName;     // Tên chủ tài khoản
 }
