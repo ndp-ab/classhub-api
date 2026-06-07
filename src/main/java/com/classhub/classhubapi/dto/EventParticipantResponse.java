@@ -1,5 +1,6 @@
 package com.classhub.classhubapi.dto;
 
+import com.classhub.classhubapi.entity.CheckinSubmissionStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -22,4 +23,9 @@ public class EventParticipantResponse {
 
     // Thời điểm đăng ký tham gia
     private LocalDateTime registeredAt;
+
+    private Long checkinSubmissionId;
+    private CheckinSubmissionStatus checkinSubmissionStatus;
+    private String checkinImageUrl;
+    private LocalDateTime checkinSubmittedAt;
 }

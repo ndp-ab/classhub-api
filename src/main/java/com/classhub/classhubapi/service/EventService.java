@@ -4,6 +4,7 @@ import com.classhub.classhubapi.dto.CreateEventRequest;
 import com.classhub.classhubapi.dto.EventParticipantResponse;
 import com.classhub.classhubapi.dto.EventResponse;
 import com.classhub.classhubapi.entity.Event;
+import com.classhub.classhubapi.entity.EventCheckinSubmission;
 import com.classhub.classhubapi.entity.EventParticipant;
 import com.classhub.classhubapi.entity.User;
 import com.classhub.classhubapi.exception.BadRequestException;
@@ -23,6 +24,7 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final EventParticipantRepository eventParticipantRepository;
+    private final EventCheckinSubmissionRepository eventCheckinSubmissionRepository;
     private final UserRepository userRepository;
     private final ClassroomRepository classroomRepository;
     private final AuthorizationService authorizationService;
@@ -117,13 +119,20 @@ public class EventService {
     }
 
     // === ADMIN XEM DANH SÁCH NGƯỜI ĐĂNG KÝ ===
+    @Transactional(readOnly = true)
     public List<EventParticipantResponse> getParticipants(Long eventId, Long userId) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new BadRequestException("Sự kiện không tồn tại"));
         authorizationService.requireAdmin(userId, event.getClassroom().getId());
 
         return eventParticipantRepository.findByEventId(eventId).stream()
-                .map(this::toParticipantResponse)
+                .map(participant -> {
+                    EventCheckinSubmission latestSubmission = eventCheckinSubmissionRepository
+                            .findTopByEventIdAndUserIdOrderBySubmittedAtDesc(
+                                    eventId, participant.getUser().getId())
+                            .orElse(null);
+                    return toParticipantResponse(participant, latestSubmission);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -155,13 +164,20 @@ public class EventService {
     }
 
     // === SỰ KIỆN ĐÃ ĐĂNG KÝ CỦA BẢN THÂN ===
+    @Transactional(readOnly = true)
     public List<EventParticipantResponse> getMyEvents(Long userId, Long classroomId) {
         authorizationService.requireMember(userId, classroomId);
 
         return eventParticipantRepository
                 .findByUserIdAndEvent_ClassroomId(userId, classroomId)
                 .stream()
-                .map(this::toParticipantResponse)
+                .map(p -> {
+                    EventCheckinSubmission latestSubmission = eventCheckinSubmissionRepository
+                            .findTopByEventIdAndUserIdOrderBySubmittedAtDesc(
+                                    p.getEvent().getId(), userId)
+                            .orElse(null);
+                    return toParticipantResponse(p, latestSubmission);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -181,6 +197,12 @@ public class EventService {
     }
 
     private EventParticipantResponse toParticipantResponse(EventParticipant p) {
+        return toParticipantResponse(p, null);
+    }
+
+    private EventParticipantResponse toParticipantResponse(
+            EventParticipant p,
+            EventCheckinSubmission latestSubmission) {
         return EventParticipantResponse.builder()
                 .id(p.getId())
                 .eventId(p.getEvent().getId())                                 // bổ sung cho FE
@@ -192,6 +214,10 @@ public class EventService {
                 .checkedByName(p.getCheckedBy() != null                         // B4
                         ? p.getCheckedBy().getFullName() : null)
                 .registeredAt(p.getRegisteredAt())
+                .checkinSubmissionId(latestSubmission != null ? latestSubmission.getId() : null)
+                .checkinSubmissionStatus(latestSubmission != null ? latestSubmission.getStatus() : null)
+                .checkinImageUrl(latestSubmission != null ? latestSubmission.getImagePath() : null)
+                .checkinSubmittedAt(latestSubmission != null ? latestSubmission.getSubmittedAt() : null)
                 .build();
     }
 }
