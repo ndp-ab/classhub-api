@@ -8,12 +8,15 @@ import com.classhub.classhubapi.dto.QrResponse;
 import com.classhub.classhubapi.entity.ClassMember;
 import com.classhub.classhubapi.entity.FundCollection;
 import com.classhub.classhubapi.entity.FundPayment;
+import com.classhub.classhubapi.entity.NotificationTargetType;
+import com.classhub.classhubapi.entity.NotificationType;
 import com.classhub.classhubapi.entity.User;
 import com.classhub.classhubapi.exception.BadRequestException;
 import com.classhub.classhubapi.exception.ForbiddenException;
 import com.classhub.classhubapi.entity.ClassroomBankAccount;
 import com.classhub.classhubapi.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FundCollectionService {
 
     // Config từ application.properties
@@ -39,6 +43,7 @@ public class FundCollectionService {
     private final ClassroomRepository classroomRepository;
     private final ClassroomBankAccountRepository bankAccountRepository;
     private final AuthorizationService authorizationService;
+    private final NotificationService notificationService;
 
     // === TẠO KHOẢN THU === (Admin)
     @Transactional
@@ -80,6 +85,20 @@ public class FundCollectionService {
                 fundPaymentRepository.save(payment);
             }
         }
+
+        List<Long> recipientUserIds = members.stream()
+                .map(member -> member.getUser().getId())
+                .filter(memberUserId -> !memberUserId.equals(userId))
+                .collect(Collectors.toList());
+        notificationService.createNotification(
+                classroom.getId(),
+                NotificationType.COLLECTION_CREATED,
+                "Có khoản thu mới",
+                "Lớp " + classroom.getClassName() + " vừa tạo khoản thu: " + collection.getTitle(),
+                NotificationTargetType.FUND_COLLECTION,
+                collection.getId(),
+                userId,
+                recipientUserIds);
 
         return toCollectionResponse(collection, members.size(), 0);
     }
@@ -175,6 +194,7 @@ public class FundCollectionService {
         payment.setConfirmedBy(admin); // B3: lưu ai xác nhận
 
         fundPaymentRepository.save(payment);
+        createPaymentConfirmedNotification(payment, adminUserId);
         return toPaymentResponse(payment);
     }
 
@@ -286,5 +306,27 @@ public class FundCollectionService {
         if (payment.isConfirmedByAdmin()) return "CONFIRMED";
         if (payment.isPaid()) return "PENDING_VERIFICATION";
         return "UNPAID";
+    }
+
+    private void createPaymentConfirmedNotification(FundPayment payment, Long adminUserId) {
+        Long recipientUserId = payment.getUser().getId();
+        if (recipientUserId.equals(adminUserId)) {
+            return;
+        }
+
+        FundCollection collection = payment.getFundCollection();
+        try {
+            notificationService.createNotification(
+                    collection.getClassroom().getId(),
+                    NotificationType.PAYMENT_CONFIRMED,
+                    "Thanh toán đã được xác nhận",
+                    "Khoản đóng " + collection.getTitle() + " của bạn đã được lớp trưởng xác nhận.",
+                    NotificationTargetType.FUND_PAYMENT,
+                    payment.getId(),
+                    adminUserId,
+                    List.of(recipientUserId));
+        } catch (RuntimeException ex) {
+            log.warn("Cannot create payment confirmed notification for payment {}", payment.getId(), ex);
+        }
     }
 }

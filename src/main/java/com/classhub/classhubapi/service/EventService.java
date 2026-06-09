@@ -6,6 +6,8 @@ import com.classhub.classhubapi.dto.EventResponse;
 import com.classhub.classhubapi.entity.Event;
 import com.classhub.classhubapi.entity.EventCheckinSubmission;
 import com.classhub.classhubapi.entity.EventParticipant;
+import com.classhub.classhubapi.entity.NotificationTargetType;
+import com.classhub.classhubapi.entity.NotificationType;
 import com.classhub.classhubapi.entity.User;
 import com.classhub.classhubapi.exception.BadRequestException;
 import com.classhub.classhubapi.repository.*;
@@ -27,7 +29,9 @@ public class EventService {
     private final EventCheckinSubmissionRepository eventCheckinSubmissionRepository;
     private final UserRepository userRepository;
     private final ClassroomRepository classroomRepository;
+    private final ClassMemberRepository classMemberRepository;
     private final AuthorizationService authorizationService;
+    private final NotificationService notificationService;
 
     // === TẠO SỰ KIỆN === (Admin)
     @Transactional
@@ -48,6 +52,21 @@ public class EventService {
                 .createdBy(user)
                 .build();
         eventRepository.save(event);
+
+        List<Long> recipientUserIds = classMemberRepository.findByClassroomId(classroom.getId()).stream()
+                .map(member -> member.getUser().getId())
+                .filter(memberUserId -> !memberUserId.equals(userId))
+                .collect(Collectors.toList());
+        notificationService.createNotification(
+                classroom.getId(),
+                NotificationType.EVENT_CREATED,
+                "Có sự kiện mới",
+                "Lớp " + classroom.getClassName() + " vừa tạo sự kiện: " + event.getTitle(),
+                NotificationTargetType.EVENT,
+                event.getId(),
+                userId,
+                recipientUserIds);
+
         return toEventResponse(event, 0, 0);
     }
 
