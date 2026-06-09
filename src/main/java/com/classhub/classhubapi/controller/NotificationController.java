@@ -19,16 +19,21 @@ public class NotificationController {
 
     @GetMapping
     public ResponseEntity<Page<NotificationResponse>> getMyNotifications(
+            @RequestParam(required = false) Long classroomId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(notificationService.getMyNotifications(
                 SecurityUtil.currentUserId(),
+                classroomId,
                 PageRequest.of(page, size)));
     }
 
     @GetMapping("/unread-count")
-    public ResponseEntity<UnreadCountResponse> getUnreadCount() {
-        return ResponseEntity.ok(notificationService.getUnreadCount(SecurityUtil.currentUserId()));
+    public ResponseEntity<UnreadCountResponse> getUnreadCount(
+            @RequestParam(required = false) Long classroomId) {
+        return ResponseEntity.ok(notificationService.getUnreadCount(
+                SecurityUtil.currentUserId(),
+                classroomId));
     }
 
     @PutMapping("/{recipientId}/read")
@@ -39,7 +44,10 @@ public class NotificationController {
     }
 
     @PutMapping("/read-all")
-    public ResponseEntity<UnreadCountResponse> markAllAsRead() {
-        return ResponseEntity.ok(notificationService.markAllAsRead(SecurityUtil.currentUserId()));
+    public ResponseEntity<UnreadCountResponse> markAllAsRead(
+            @RequestParam(required = false) Long classroomId) {
+        return ResponseEntity.ok(notificationService.markAllAsRead(
+                SecurityUtil.currentUserId(),
+                classroomId));
     }
 }

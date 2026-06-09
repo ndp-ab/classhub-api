@@ -32,16 +32,22 @@ public class NotificationService {
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public Page<NotificationResponse> getMyNotifications(Long userId, Pageable pageable) {
-        return notificationRecipientRepository
-                .findByUserIdOrderByCreatedAtDesc(userId, pageable)
-                .map(this::toResponse);
+    public Page<NotificationResponse> getMyNotifications(Long userId, Long classroomId, Pageable pageable) {
+        Page<NotificationRecipient> recipients = classroomId == null
+                ? notificationRecipientRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                : notificationRecipientRepository.findByUserIdAndNotification_Classroom_IdOrderByCreatedAtDesc(
+                        userId, classroomId, pageable);
+        return recipients.map(this::toResponse);
     }
 
     @Transactional(readOnly = true)
-    public UnreadCountResponse getUnreadCount(Long userId) {
+    public UnreadCountResponse getUnreadCount(Long userId, Long classroomId) {
+        long count = classroomId == null
+                ? notificationRecipientRepository.countByUserIdAndReadFalse(userId)
+                : notificationRecipientRepository.countByUserIdAndReadFalseAndNotification_Classroom_Id(
+                        userId, classroomId);
         return UnreadCountResponse.builder()
-                .count(notificationRecipientRepository.countByUserIdAndReadFalse(userId))
+                .count(count)
                 .build();
     }
 
@@ -61,9 +67,11 @@ public class NotificationService {
     }
 
     @Transactional
-    public UnreadCountResponse markAllAsRead(Long userId) {
-        List<NotificationRecipient> unreadRecipients =
-                notificationRecipientRepository.findByUserIdAndReadFalse(userId);
+    public UnreadCountResponse markAllAsRead(Long userId, Long classroomId) {
+        List<NotificationRecipient> unreadRecipients = classroomId == null
+                ? notificationRecipientRepository.findByUserIdAndReadFalse(userId)
+                : notificationRecipientRepository.findByUserIdAndReadFalseAndNotification_Classroom_Id(
+                        userId, classroomId);
         LocalDateTime now = LocalDateTime.now();
 
         unreadRecipients.forEach(recipient -> {
@@ -73,7 +81,7 @@ public class NotificationService {
         notificationRecipientRepository.saveAll(unreadRecipients);
 
         return UnreadCountResponse.builder()
-                .count(0)
+                .count(unreadRecipients.size())
                 .build();
     }
 
