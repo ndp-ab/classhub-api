@@ -3,6 +3,7 @@ package com.classhub.classhubapi.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -33,6 +34,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public: chỉ /auth (đăng ký/đăng nhập)
                         .requestMatchers("/api/auth/**").permitAll()
+                        //mở getBank public
+                        .requestMatchers(HttpMethod.GET, "/api/banks").permitAll()
                         // Mọi API khác đều cần JWT
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()

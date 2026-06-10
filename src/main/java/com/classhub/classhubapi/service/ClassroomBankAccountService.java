@@ -2,10 +2,12 @@ package com.classhub.classhubapi.service;
 
 import com.classhub.classhubapi.dto.ClassroomBankAccountResponse;
 import com.classhub.classhubapi.dto.UpdateClassroomBankAccountRequest;
+import com.classhub.classhubapi.entity.Bank;
 import com.classhub.classhubapi.entity.Classroom;
 import com.classhub.classhubapi.entity.ClassroomBankAccount;
 import com.classhub.classhubapi.entity.User;
 import com.classhub.classhubapi.exception.BadRequestException;
+import com.classhub.classhubapi.repository.BankRepository;
 import com.classhub.classhubapi.repository.ClassroomBankAccountRepository;
 import com.classhub.classhubapi.repository.ClassroomRepository;
 import com.classhub.classhubapi.repository.UserRepository;
@@ -21,6 +23,7 @@ import java.util.stream.Collectors;
 public class ClassroomBankAccountService {
 
     private final ClassroomBankAccountRepository bankAccountRepository;
+    private final BankRepository bankRepository;
     private final ClassroomRepository classroomRepository;
     private final UserRepository userRepository;
     private final AuthorizationService authorizationService;
@@ -61,6 +64,10 @@ public class ClassroomBankAccountService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User không tồn tại"));
 
+        Bank bank = bankRepository.findByBin(request.getBankBin())
+                .filter(candidate -> Boolean.TRUE.equals(candidate.getActive()))
+                .orElseThrow(() -> new BadRequestException("Ngân hàng không hợp lệ hoặc chưa được đồng bộ"));
+
         // B1: Tắt tài khoản cũ (nếu có)
         bankAccountRepository.findByClassroomIdAndActiveTrue(classroomId)
                 .ifPresent(oldAccount -> {
@@ -71,8 +78,9 @@ public class ClassroomBankAccountService {
         // B2: Tạo tài khoản mới
         ClassroomBankAccount newAccount = ClassroomBankAccount.builder()
                 .classroom(classroom)
-                .bankBin(request.getBankBin())
-                .bankName(request.getBankName())
+                .bankBin(bank.getBin())
+                .bankName(bank.getName())
+                .shortName(bank.getShortName())
                 .accountNo(request.getAccountNo())
                 .accountName(request.getAccountName())
                 .active(true)
@@ -90,6 +98,7 @@ public class ClassroomBankAccountService {
                 .id(account.getId())
                 .bankBin(account.getBankBin())
                 .bankName(account.getBankName())
+                .shortName(account.getShortName())
                 .accountNo(account.getAccountNo())
                 .accountName(account.getAccountName())
                 .active(account.getActive())

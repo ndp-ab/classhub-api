@@ -27,7 +27,6 @@ public class ClassroomBankAccount {
     private Classroom classroom;
 
     // Bank BIN (mã ngân hàng)
-    // VD: 970415=Vietinbank, 970422=MBBank, 970436=Vietcombank
     @NotBlank
     @Column(name = "bank_bin", nullable = false, length = 6)
     private String bankBin;
@@ -36,6 +35,9 @@ public class ClassroomBankAccount {
     @NotBlank
     @Column(name = "bank_name", nullable = false, length = 100)
     private String bankName;
+
+    @Column(name = "short_name", length = 100)
+    private String shortName;
 
     // Số tài khoản
     @NotBlank

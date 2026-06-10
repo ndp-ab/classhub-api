@@ -12,6 +12,7 @@ public class ClassroomBankAccountResponse {
     private Long id;
     private String bankBin;
     private String bankName;
+    private String shortName;
     private String accountNo;
     private String accountName;
     private Boolean active;
